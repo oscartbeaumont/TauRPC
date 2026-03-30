@@ -1,8 +1,9 @@
 use heck::ToLowerCamelCase;
-use specta::TypeCollection;
-use specta::datatype::{DataType, Field, Function, FunctionReturnType, Reference, Struct};
-use specta_typescript::Error;
-use specta_typescript::{self as ts, Exporter, FrameworkExporter, define};
+use specta::{
+    ResolvedTypes, Types,
+    datatype::{DataType, Field, Function, Reference, Struct},
+};
+use specta_typescript::{Error, Exporter, FrameworkExporter, Typescript, define};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -33,10 +34,22 @@ export type { InferCommandOutput }
 pub(super) fn export_types(
     export_path: &'static str,
     args_map: BTreeMap<String, String>,
-    ts: ts::Typescript,
+    ts: Typescript,
     functions: BTreeMap<String, Vec<Function>>,
-    types: TypeCollection,
+    types: Types,
 ) -> Result<(), Error> {
+    // TODO: Maybe default to `true` once this is more stable.
+    // Maybe use a runtime configuration system?
+    let specta_phases_enabled = cfg!(not(feature = "specta_phases"));
+
+    let mut types = if specta_phases_enabled {
+        specta_serde::apply(types)
+    } else {
+        specta_serde::apply_phases(types)
+    }
+    .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
+    types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
+
     Exporter::from(ts)
         .framework_prelude(FRAMEWORK_HEADER)
         .framework_runtime(move |mut exporter| {
@@ -113,10 +126,14 @@ fn generate_function_field(
         .collect::<Result<Vec<_>, _>>()?
         .join(", ");
 
-    let return_ty = match function.result() {
-        Some(FunctionReturnType::Value(t)) => render_reference_dt(t, exporter)?,
-        Some(FunctionReturnType::Result(t, _e)) => render_reference_dt(t, exporter)?,
-        None => "void".to_string(),
+    let return_ty = if let Some(result) = function.result() {
+        if let Some((dt_ok, _dt_err)) = extract_std_result(result, exporter.types) {
+            render_reference_dt(dt_ok, exporter)?
+        } else {
+            render_reference_dt(result, exporter)?
+        }
+    } else {
+        "void".to_string()
     };
 
     let name = function.name().split_once("_taurpc_fn__").unwrap().1;
@@ -130,7 +147,7 @@ fn generate_function_field(
 // Also handles Tauri channel references.
 fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<String, Error> {
     if let DataType::Reference(Reference::Named(r)) = dt
-        && let Some(ndt) = r.get(exporter.types)
+        && let Some(ndt) = r.get(exporter.types.as_types())
         && ndt.name() == "TAURI_CHANNEL"
         && ndt.module_path().starts_with("tauri::")
     {
@@ -149,5 +166,88 @@ fn render_reference_dt(dt: &DataType, exporter: &FrameworkExporter) -> Result<St
             DataType::Reference(r) => exporter.reference(r),
             dt => exporter.inline(dt),
         }
+    }
+}
+
+fn extract_std_result<'a>(
+    dt: &'a DataType,
+    types: &'a ResolvedTypes,
+) -> Option<(&'a DataType, &'a DataType)> {
+    if let DataType::Reference(Reference::Named(r)) = dt
+        && let Some(ndt) = r.get(types.as_types())
+        && ndt.name() == "Result"
+        && (ndt.module_path() == "std::result" || ndt.module_path() == "core::result")
+        && let [(_, ok), (_, err), ..] = r.generics()
+    {
+        return Some((ok, err));
+    }
+
+    None
+}
+
+/// This rewrites any large number types to a smaller type.
+/// The newest version of Specta's Typescript exporter will always error on these (and `BigIntExportBehaviour` has been removed).
+/// The recommendations for handling this now are documented here: https://github.com/specta-rs/specta/blob/d578bc055b7c5e6573d1cd723e7be56d33c28e5c/specta-typescript/src/error.rs#L11
+///
+// TODO: I (@oscartbeaumont) am going to do a follow up PR to support BigInt's properly in the future but this requires upstream work in Tauri so it's not possible at the moment.
+fn rewrite_bigints_in_datatype(dt: &mut DataType) {
+    use specta::datatype::{DataType, Fields, Primitive};
+
+    fn rewrite_bigints_in_fields(fields: &mut Fields) {
+        match fields {
+            Fields::Unit => {}
+            Fields::Unnamed(fields) => {
+                for field in fields.fields_mut() {
+                    if let Some(ty) = field.ty_mut() {
+                        rewrite_bigints_in_datatype(ty);
+                    }
+                }
+            }
+            Fields::Named(fields) => {
+                for (_, field) in fields.fields_mut() {
+                    if let Some(ty) = field.ty_mut() {
+                        rewrite_bigints_in_datatype(ty);
+                    }
+                }
+            }
+        }
+    }
+
+    match dt {
+        DataType::Primitive(primitive) => match primitive {
+            Primitive::usize | Primitive::u64 | Primitive::u128 => {
+                *dt = DataType::Primitive(Primitive::u32);
+            }
+            Primitive::isize | Primitive::i64 | Primitive::i128 => {
+                *dt = DataType::Primitive(Primitive::i32);
+            }
+            Primitive::f128 => {
+                *dt = DataType::Primitive(Primitive::f64);
+            }
+            _ => {}
+        },
+        DataType::List(list) => rewrite_bigints_in_datatype(list.ty_mut()),
+        DataType::Map(map) => {
+            rewrite_bigints_in_datatype(map.key_ty_mut());
+            rewrite_bigints_in_datatype(map.value_ty_mut());
+        }
+        DataType::Struct(strct) => rewrite_bigints_in_fields(strct.fields_mut()),
+        DataType::Enum(enm) => {
+            for (_, variant) in enm.variants_mut() {
+                rewrite_bigints_in_fields(variant.fields_mut());
+            }
+        }
+        DataType::Tuple(tuple) => {
+            for item in tuple.elements_mut() {
+                rewrite_bigints_in_datatype(item);
+            }
+        }
+        DataType::Nullable(inner) => rewrite_bigints_in_datatype(inner),
+        DataType::Reference(Reference::Named(reference)) => {
+            for (_, generic) in reference.generics_mut() {
+                rewrite_bigints_in_datatype(generic);
+            }
+        }
+        DataType::Reference(Reference::Generic(_)) | DataType::Reference(Reference::Opaque(_)) => {}
     }
 }

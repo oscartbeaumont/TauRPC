@@ -1,10 +1,11 @@
 use super::extend_errors;
 use syn::{
-    Attribute, FnArg, Generics, Ident, Pat, ReturnType, Token, Visibility, braced,
+    braced,
     ext::IdentExt,
     parenthesized,
     parse::{self, Parse, ParseStream},
     spanned::Spanned,
+    Attribute, FnArg, Generics, Ident, Pat, ReturnType, Token, Visibility,
 };
 
 use crate::{args::Arg, attrs::MethodAttrs};

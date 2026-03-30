@@ -6,7 +6,7 @@
 
 pub extern crate serde;
 pub extern crate specta;
-use specta::TypeCollection;
+use specta::Types;
 use specta::datatype::Function;
 pub use specta_typescript::Typescript;
 
@@ -45,8 +45,8 @@ pub trait TauRpcHandler<R: Runtime>: Sized {
     /// This is used on the frontend to ensure the arguments are send with their correct idents to the backend.
     fn args_map() -> String;
 
-    /// Returns all of the functions for exporting, all referenced types will be added to `type_map`.
-    fn collect_fn_types(types: &mut TypeCollection) -> Vec<Function>;
+    /// Returns all of the functions for exporting, all referenced types will be added to `types`.
+    fn collect_fn_types(types: &mut Types) -> Vec<Function>;
 }
 
 /// Creates a handler that allows your IPCs to be called from the frontend with the coresponding
@@ -87,11 +87,8 @@ where
     H: TauRpcHandler<R> + Send + Sync + 'static + Clone,
 {
     let args_map = BTreeMap::from([(H::PATH_PREFIX.to_string(), H::args_map())]);
-    let mut type_map = TypeCollection::default();
-    let functions = BTreeMap::from([(
-        H::PATH_PREFIX.to_string(),
-        H::collect_fn_types(&mut type_map),
-    )]);
+    let mut types = Types::default();
+    let functions = BTreeMap::from([(H::PATH_PREFIX.to_string(), H::collect_fn_types(&mut types))]);
 
     // Only export in development mode and export_path not none
     if tauri::is_dev()
@@ -102,7 +99,7 @@ where
             args_map,
             specta_typescript::Typescript::default(),
             functions,
-            type_map,
+            types,
         )
         .unwrap();
     }
@@ -220,7 +217,7 @@ impl<RT: Runtime> EventTrigger<RT> {
 /// ```
 #[derive(Default)]
 pub struct Router<R: Runtime> {
-    types: TypeCollection,
+    types: Types,
     handlers: HashMap<String, Sender<Arc<Invoke<R>>>>,
     export_path: Option<&'static str>,
     args_map_json: BTreeMap<String, String>,
@@ -231,7 +228,7 @@ pub struct Router<R: Runtime> {
 impl<R: Runtime> Router<R> {
     pub fn new() -> Self {
         Self {
-            types: TypeCollection::default(),
+            types: Types::default(),
             handlers: HashMap::new(),
             fns_map: BTreeMap::new(),
             export_path: None,

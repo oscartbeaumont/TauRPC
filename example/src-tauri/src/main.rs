@@ -230,7 +230,6 @@ async fn main() {
         .export_config(
             specta_typescript::Typescript::default()
                 .header("// My header")
-                .bigint(specta_typescript::BigIntExportBehavior::String),
         )
         .merge(
             ApiImpl {
