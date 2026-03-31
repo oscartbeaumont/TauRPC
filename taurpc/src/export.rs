@@ -41,13 +41,13 @@ pub(super) fn export_types(
 ) -> Result<(), Error> {
     // TODO: Maybe default to `true` once this is more stable.
     // Maybe use a runtime configuration system?
-    let specta_phases_enabled = cfg!(not(feature = "specta_phases"));
+    let specta_phases_enabled = cfg!(feature = "specta_phases");
 
     types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
     let types = if specta_phases_enabled {
-        specta_serde::apply(types)
-    } else {
         specta_serde::apply_phases(types)
+    } else {
+        specta_serde::apply(types)
     }
     .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
 
