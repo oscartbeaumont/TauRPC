@@ -1,8 +1,9 @@
 use heck::ToLowerCamelCase;
 use specta::{
     ResolvedTypes, Types,
-    datatype::{DataType, Field, Function, Reference, Struct},
+    datatype::{DataType, Field, Fields, Function, Primitive, Reference, Struct},
 };
+use specta_serde::Phase;
 use specta_typescript::{Error, Exporter, FrameworkExporter, Typescript, define};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
@@ -36,19 +37,19 @@ pub(super) fn export_types(
     args_map: BTreeMap<String, String>,
     ts: Typescript,
     functions: BTreeMap<String, Vec<Function>>,
-    types: Types,
+    mut types: Types,
 ) -> Result<(), Error> {
     // TODO: Maybe default to `true` once this is more stable.
     // Maybe use a runtime configuration system?
     let specta_phases_enabled = cfg!(not(feature = "specta_phases"));
 
-    let mut types = if specta_phases_enabled {
+    types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
+    let types = if specta_phases_enabled {
         specta_serde::apply(types)
     } else {
         specta_serde::apply_phases(types)
     }
     .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
-    types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
 
     Exporter::from(ts)
         .framework_prelude(FRAMEWORK_HEADER)
@@ -116,11 +117,13 @@ fn generate_function_field(
     function: &Function,
     exporter: &FrameworkExporter,
 ) -> Result<(String, Field), Error> {
+    validate_exported_command(function, exporter.types)?;
+
     let args = function
         .args()
         .iter()
         .map(|(name, typ)| {
-            render_reference_dt(typ, exporter)
+            render_reference_dt_for_phase(typ, Phase::Deserialize, exporter)
                 .map(|ty| format!("{}: {ty}", name.to_lower_camel_case()))
         })
         .collect::<Result<Vec<_>, _>>()?
@@ -128,9 +131,9 @@ fn generate_function_field(
 
     let return_ty = if let Some(result) = function.result() {
         if let Some((dt_ok, _dt_err)) = extract_std_result(result, exporter.types) {
-            render_reference_dt(dt_ok, exporter)?
+            render_reference_dt_for_phase(dt_ok, Phase::Serialize, exporter)?
         } else {
-            render_reference_dt(result, exporter)?
+            render_reference_dt_for_phase(result, Phase::Serialize, exporter)?
         }
     } else {
         "void".to_string()
@@ -185,14 +188,59 @@ fn extract_std_result<'a>(
     None
 }
 
+fn validate_exported_command(command: &Function, types: &ResolvedTypes) -> Result<(), Error> {
+    for (position, (name, dt)) in command.args().iter().enumerate() {
+        specta_serde::validate(dt, types).map_err(|err| {
+            Error::framework(
+                format!(
+                    "Specta Serde validation failed for command '{}' param #{} ('{}')",
+                    command.name(),
+                    position + 1,
+                    name
+                ),
+                err,
+            )
+        })?;
+    }
+
+    if let Some(result) = command.result() {
+        specta_serde::validate(result, types).map_err(|err| {
+            Error::framework(
+                format!(
+                    "Specta Serde validation failed for command '{}' result",
+                    command.name()
+                ),
+                err,
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
+fn render_reference_dt_for_phase(
+    dt: &DataType,
+    phase: Phase,
+    exporter: &FrameworkExporter,
+) -> Result<String, Error> {
+    let dt =
+        specta_serde::select_phase_datatype(&rewrite_bigints_for_export(dt), exporter.types, phase);
+
+    render_reference_dt(&dt, exporter)
+}
+
+fn rewrite_bigints_for_export(dt: &DataType) -> DataType {
+    let mut dt = dt.clone();
+    rewrite_bigints_in_datatype(&mut dt);
+    dt
+}
+
 /// This rewrites any large number types to a smaller type.
-/// The newest version of Specta's Typescript exporter will always error on these (and `BigIntExportBehaviour` has been removed).
+/// The newest version of Specta's Typescript exporter will always error on these (and the previous solution which was `BigIntExportBehaviour` has been removed).
 /// The recommendations for handling this now are documented here: https://github.com/specta-rs/specta/blob/d578bc055b7c5e6573d1cd723e7be56d33c28e5c/specta-typescript/src/error.rs#L11
 ///
 // TODO: I (@oscartbeaumont) am going to do a follow up PR to support BigInt's properly in the future but this requires upstream work in Tauri so it's not possible at the moment.
 fn rewrite_bigints_in_datatype(dt: &mut DataType) {
-    use specta::datatype::{DataType, Fields, Primitive};
-
     fn rewrite_bigints_in_fields(fields: &mut Fields) {
         match fields {
             Fields::Unit => {}
@@ -215,11 +263,13 @@ fn rewrite_bigints_in_datatype(dt: &mut DataType) {
 
     match dt {
         DataType::Primitive(primitive) => match primitive {
-            Primitive::usize | Primitive::u64 | Primitive::u128 => {
-                *dt = DataType::Primitive(Primitive::u32);
-            }
-            Primitive::isize | Primitive::i64 | Primitive::i128 => {
-                *dt = DataType::Primitive(Primitive::i32);
+            Primitive::usize
+            | Primitive::isize
+            | Primitive::u64
+            | Primitive::i64
+            | Primitive::u128
+            | Primitive::i128 => {
+                *dt = define("number").into();
             }
             Primitive::f128 => {
                 *dt = DataType::Primitive(Primitive::f64);

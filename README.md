@@ -241,14 +241,15 @@ All available options can be found in [specta_typescript's docs](https://docs.rs
 let router = Router::new()
     .export_config(
         specta_typescript::Typescript::default()
-            .header("// My header")
-            .bigint(specta_typescript::BigIntExportBehavior::String),
+            .header("// My header"),
             // Make sure you have the specified formatter installed on your system.
             .formatter(specta_typescript::formatter::prettier)
     )
     .merge(ApiImpl.into_handler())
     .merge(EventsImpl.into_handler());
 ```
+
+TauRPC currently exports Rust bigint-like integers (`i64`, `u64`, `i128`, `u128`, `isize`, `usize`) as TypeScript `number` values. This keeps the generated bindings simple, but values outside JavaScript's safe integer range can lose precision.
 
 # Calling the frontend
 

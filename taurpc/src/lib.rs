@@ -245,8 +245,7 @@ impl<R: Runtime> Router<R> {
     /// let router = taurpc::Router::new()
     ///     .export_config(
     ///         specta_typescript::Typescript::default()
-    ///             .header("// My header")
-    ///             .bigint(specta_typescript::BigIntExportBehavior::String),
+    ///             .header("// My header"),
     ///     )
     ///     .merge(ApiImpl.into_handler());
     /// ```

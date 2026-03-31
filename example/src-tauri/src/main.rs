@@ -2,10 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{sync::Arc, time::Duration};
-use tauri::{AppHandle, EventTarget, Manager, Runtime, WebviewWindow, Window, ipc::Channel};
+use tauri::{ipc::Channel, AppHandle, EventTarget, Manager, Runtime, WebviewWindow, Window};
 use taurpc::Router;
 use tokio::{
-    sync::{Mutex, oneshot},
+    sync::{oneshot, Mutex},
     time::sleep,
 };
 
@@ -47,6 +47,12 @@ struct Update {
     progress: u8,
 }
 
+#[taurpc::ipc_type]
+struct PhaseSpecificRename {
+    #[serde(rename(serialize = "serialized_value", deserialize = "deserialized_value"))]
+    value: String,
+}
+
 // #[taurpc::procedures(event_trigger = ApiEventTrigger)]
 #[taurpc::procedures(event_trigger = ApiEventTrigger, export_to = "../src/lib/bindings.ts")]
 trait Api {
@@ -82,6 +88,8 @@ trait Api {
     async fn test_bigint(num: i64) -> i64;
 
     async fn with_channel(on_event: Channel<Update>);
+
+    async fn phase_specific_rename(input: PhaseSpecificRename) -> PhaseSpecificRename;
 }
 
 #[derive(Clone)]
@@ -153,6 +161,10 @@ impl Api for ApiImpl {
         for progress in [15, 20, 35, 50, 90] {
             on_event.send(Update { progress }).unwrap();
         }
+    }
+
+    async fn phase_specific_rename(self, input: PhaseSpecificRename) -> PhaseSpecificRename {
+        input
     }
 }
 
@@ -227,10 +239,7 @@ async fn main() {
     });
 
     let router = Router::new()
-        .export_config(
-            specta_typescript::Typescript::default()
-                .header("// My header")
-        )
+        .export_config(specta_typescript::Typescript::default().header("// My header"))
         .merge(
             ApiImpl {
                 state: Arc::new(Mutex::new("state".to_string())),
