@@ -6,11 +6,8 @@
     "semiColons": "asi"
   },
   "exec": {
-    "associations": "**/*.{rs}",
-    "commands": [{
-      "command": "rustfmt --edition 2024",
-      "exts": ["rs"]
-    }]
+    "rustfmt": "rustfmt --edition 2024",
+    "rustfmt.associations": "**/*.rs"
   },
   "includes": [
     "**/*.{ts,tsx,js,jsx,cjs,mjs,json,json5,md,yaml,rs}"
