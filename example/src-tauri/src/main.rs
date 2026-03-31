@@ -47,11 +47,11 @@ struct Update {
     progress: u8,
 }
 
-#[taurpc::ipc_type]
-struct PhaseSpecificRename {
-    #[serde(rename(serialize = "serialized_value", deserialize = "deserialized_value"))]
-    value: String,
-}
+// #[taurpc::ipc_type]
+// struct PhaseSpecificRename {
+//     #[serde(rename(serialize = "serialized_value", deserialize = "deserialized_value"))]
+//     value: String,
+// }
 
 // #[taurpc::procedures(event_trigger = ApiEventTrigger)]
 #[taurpc::procedures(event_trigger = ApiEventTrigger, export_to = "../src/lib/bindings.ts")]
@@ -89,7 +89,8 @@ trait Api {
 
     async fn with_channel(on_event: Channel<Update>);
 
-    async fn phase_specific_rename(input: PhaseSpecificRename) -> PhaseSpecificRename;
+    // Requires "specta_phases" feature on TauRPC for now
+    // async fn phase_specific_rename(input: PhaseSpecificRename) -> PhaseSpecificRename;
 }
 
 #[derive(Clone)]
@@ -163,9 +164,10 @@ impl Api for ApiImpl {
         }
     }
 
-    async fn phase_specific_rename(self, input: PhaseSpecificRename) -> PhaseSpecificRename {
-        input
-    }
+    // Requires "specta_phases" feature on TauRPC for now
+    // async fn phase_specific_rename(self, input: PhaseSpecificRename) -> PhaseSpecificRename {
+    //     input
+    // }
 }
 
 #[taurpc::procedures(path = "events", export_to = "../src/lib/bindings.ts")]
