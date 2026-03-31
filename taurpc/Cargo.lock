@@ -3030,7 +3030,7 @@ dependencies = [
 [[package]]
 name = "specta"
 version = "2.0.0-rc.23"
-source = "git+https://github.com/specta-rs/specta?rev=d578bc055b7c5e6573d1cd723e7be56d33c28e5c#d578bc055b7c5e6573d1cd723e7be56d33c28e5c"
+source = "git+https://github.com/specta-rs/specta?rev=2e769e745686e37b83f7240f2def4360e8113713#2e769e745686e37b83f7240f2def4360e8113713"
 dependencies = [
  "paste",
  "rustc_version",
@@ -3040,7 +3040,7 @@ dependencies = [
 [[package]]
 name = "specta-macros"
 version = "2.0.0-rc.23"
-source = "git+https://github.com/specta-rs/specta?rev=d578bc055b7c5e6573d1cd723e7be56d33c28e5c#d578bc055b7c5e6573d1cd723e7be56d33c28e5c"
+source = "git+https://github.com/specta-rs/specta?rev=2e769e745686e37b83f7240f2def4360e8113713#2e769e745686e37b83f7240f2def4360e8113713"
 dependencies = [
  "Inflector",
  "proc-macro2",
@@ -3051,7 +3051,7 @@ dependencies = [
 [[package]]
 name = "specta-serde"
 version = "0.0.10"
-source = "git+https://github.com/specta-rs/specta?rev=d578bc055b7c5e6573d1cd723e7be56d33c28e5c#d578bc055b7c5e6573d1cd723e7be56d33c28e5c"
+source = "git+https://github.com/specta-rs/specta?rev=2e769e745686e37b83f7240f2def4360e8113713#2e769e745686e37b83f7240f2def4360e8113713"
 dependencies = [
  "specta",
  "specta-macros",
@@ -3060,7 +3060,7 @@ dependencies = [
 [[package]]
 name = "specta-typescript"
 version = "0.0.10"
-source = "git+https://github.com/specta-rs/specta?rev=d578bc055b7c5e6573d1cd723e7be56d33c28e5c#d578bc055b7c5e6573d1cd723e7be56d33c28e5c"
+source = "git+https://github.com/specta-rs/specta?rev=2e769e745686e37b83f7240f2def4360e8113713#2e769e745686e37b83f7240f2def4360e8113713"
 dependencies = [
  "specta",
 ]
