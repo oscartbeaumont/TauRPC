@@ -39,9 +39,3 @@ specta-serde = "0.0.11"
 tauri = { version = "2.10.2", features = ["specta"] }
 taurpc-macros = { path = "./taurpc-macros", version = "=0.7.1" }
 tokio = { version = "1", features = ["full"] }
-
-# TODO: remove these once released as `.rc-24`
-[patch.crates-io]
-specta = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
-specta-typescript = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
-specta-serde = { git = "https://github.com/specta-rs/specta", rev = "2e769e745686e37b83f7240f2def4360e8113713" }
