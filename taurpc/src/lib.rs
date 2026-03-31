@@ -96,14 +96,18 @@ where
     if tauri::is_dev()
         && let Some(export_path) = H::EXPORT_PATH
     {
-        export_types(
+        match export_types(
             export_path,
             args_map,
             specta_typescript::Typescript::default(),
             functions,
             types,
-        )
-        .unwrap();
+        ) {
+            Ok(_) => (),
+            Err(e) => {
+                println!("Error exporting types: {e:?}\ntaurpc will continue with router creation.")
+            }
+        };
     }
 
     move |invoke: Invoke<R>| {
@@ -293,14 +297,18 @@ impl<R: Runtime> Router<R> {
         if tauri::is_dev()
             && let Some(export_path) = self.export_path
         {
-            export_types(
+            match export_types(
                 export_path,
                 self.args_map_json.clone(),
                 self.export_config.clone(),
                 self.fns_map.clone(),
                 self.types.clone(),
-            )
-            .unwrap();
+            ) {
+                Ok(_) => (),
+                Err(e) => println!(
+                    "Error exporting types: {e:?}\ntaurpc will continue with router creation."
+                ),
+            };
         }
 
         move |invoke: Invoke<R>| self.on_command(invoke)

@@ -39,17 +39,9 @@ pub(super) fn export_types(
     functions: BTreeMap<String, Vec<Function>>,
     mut types: Types,
 ) -> Result<(), Error> {
-    // TODO: Maybe default to `true` once this is more stable.
-    // Maybe use a runtime configuration system?
-    let specta_phases_enabled = true;
-
     types.iter_mut(|ndt| rewrite_bigints_in_datatype(ndt.ty_mut()));
-    let types = if specta_phases_enabled {
-        specta_serde::apply(types)
-    } else {
-        specta_serde::apply_phases(types)
-    }
-    .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
+    let types = specta_serde::apply_phases(types)
+        .map_err(|err| Error::framework("Specta Serde validation failed", err))?;
 
     Exporter::from(ts)
         .framework_prelude(FRAMEWORK_HEADER)
